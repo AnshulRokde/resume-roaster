@@ -26,16 +26,11 @@ async function extractTextFromPdf(file: File): Promise<string> {
 }
 
 async function extractTextFromImage(file: File): Promise<string> {
-  // Dynamically import Tesseract.js — runs client-side via WASM
   const { default: Tesseract } = await import("tesseract.js");
-  const {
-    data: { text },
-  } = await Tesseract.recognize(file, "eng");
+  const { data: { text } } = await Tesseract.recognize(file, "eng");
   const cleaned = text.replace(/\s+/g, " ").trim();
   if (cleaned.length < 20) {
-    throw new Error(
-      "Could not read enough text from the image. Make sure the resume is clearly visible."
-    );
+    throw new Error("Could not read enough text from the image. Make sure the resume is clearly visible.");
   }
   return cleaned;
 }
@@ -56,9 +51,7 @@ export default function UploadForm() {
       return;
     }
     if (candidate.size > MAX_FILE_SIZE) {
-      setValidationError(
-        `File too large. Max 10MB (yours is ${formatFileSize(candidate.size)}).`
-      );
+      setValidationError(`File too large. Max 10MB (yours is ${formatFileSize(candidate.size)}).`);
       return;
     }
     setFile(candidate);
@@ -70,32 +63,23 @@ export default function UploadForm() {
     e.target.value = "";
   }
 
-  function clearFile() {
-    setFile(null);
-    setValidationError("");
-  }
+  function clearFile() { setFile(null); setValidationError(""); }
 
   function reset() {
-    setFile(null);
-    setValidationError("");
-    setApiError("");
-    setResult(null);
-    setStatus("idle");
+    setFile(null); setValidationError("");
+    setApiError(""); setResult(null); setStatus("idle");
   }
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
+    e.preventDefault(); setIsDragging(true);
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
+    e.preventDefault(); setIsDragging(false);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
+    e.preventDefault(); setIsDragging(false);
     const dropped = e.dataTransfer.files[0];
     if (dropped) validateAndSet(dropped);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -103,16 +87,12 @@ export default function UploadForm() {
   async function handleRoast() {
     if (!file) return;
     setApiError("");
-
     try {
-      // Step 1: Extract text
       setStatus("extracting");
-      const resumeText =
-        file.type === "application/pdf"
-          ? await extractTextFromPdf(file)
-          : await extractTextFromImage(file);
+      const resumeText = file.type === "application/pdf"
+        ? await extractTextFromPdf(file)
+        : await extractTextFromImage(file);
 
-      // Step 2: Roast
       setStatus("roasting");
       const res = await fetch("/api/roast", {
         method: "POST",
@@ -121,7 +101,6 @@ export default function UploadForm() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Roast API failed.");
-
       setResult(data as RoastResultType);
       setStatus("done");
     } catch (err) {
@@ -132,136 +111,131 @@ export default function UploadForm() {
 
   const isLoading = status === "extracting" || status === "roasting";
 
-  const loadingMessage =
-    status === "extracting"
-      ? "Extracting text from your resume..."
-      : "Roasting your resume...";
+  if (status === "done" && result) {
+    return <RoastResult result={result} fileName={file?.name ?? "resume"} onReset={reset} />;
+  }
 
   return (
-    <div className="w-full max-w-xl mx-auto flex flex-col gap-5">
-      {/* Upload area — hidden while showing results */}
-      {status !== "done" && (
-        <>
-          <div
-            onClick={() => !file && !isLoading && inputRef.current?.click()}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={[
-              "relative rounded-2xl border-2 border-dashed p-10 text-center transition-all select-none",
-              isLoading
-                ? "border-white/20 opacity-60 cursor-not-allowed"
-                : file
-                ? "border-[#ff6b6b] bg-[#ff6b6b]/5 cursor-default"
-                : isDragging
-                ? "border-[#ff6b6b] bg-[#ff6b6b]/10 scale-[1.01] cursor-copy"
-                : "border-white/20 hover:border-[#ff6b6b]/60 hover:bg-white/5 cursor-pointer",
-            ].join(" ")}
-          >
-            <input
-              ref={inputRef}
-              type="file"
-              accept={ACCEPTED_EXTENSIONS}
-              onChange={handleInputChange}
-              className="hidden"
-              disabled={isLoading}
-            />
+    <div className="w-full max-w-xl mx-auto flex flex-col gap-4">
 
-            {file ? (
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-3xl shrink-0">
-                    {file.type === "application/pdf" ? "📄" : "🖼️"}
-                  </span>
-                  <div className="text-left min-w-0">
-                    <p className="text-white font-semibold truncate">
-                      {file.name}
-                    </p>
-                    <p className="text-white/50 text-sm">
-                      {formatFileSize(file.size)}
-                    </p>
-                  </div>
-                </div>
-                {!isLoading && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      clearFile();
-                    }}
-                    aria-label="Remove file"
-                    className="shrink-0 w-8 h-8 rounded-full bg-white/10 hover:bg-[#ff6b6b]/80 text-white/60 hover:text-white transition-colors flex items-center justify-center text-lg leading-none"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-3 pointer-events-none">
-                <span className="text-5xl">{isDragging ? "📂" : "📁"}</span>
-                <p className="text-white font-semibold text-lg">
-                  {isDragging
-                    ? "Drop it here"
-                    : "Drag your resume here or click to upload"}
+      {/* Drop zone */}
+      <div
+        onClick={() => !file && !isLoading && inputRef.current?.click()}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={[
+          "corner-bracket relative rounded-none border p-8 text-center transition-all duration-300 select-none",
+          isLoading
+            ? "border-[#00d4ff]/20 opacity-60 cursor-not-allowed"
+            : file
+            ? "border-[#ff6b6b]/50 border-glow-red bg-[#ff6b6b]/5 cursor-default"
+            : isDragging
+            ? "border-[#00d4ff] border-glow-cyan bg-[#00d4ff]/5 scale-[1.01] cursor-copy"
+            : "border-[#00d4ff]/25 hover:border-[#00d4ff]/60 hover:border-glow-cyan hover:bg-[#00d4ff]/5 cursor-pointer",
+        ].join(" ")}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept={ACCEPTED_EXTENSIONS}
+          onChange={handleInputChange}
+          className="hidden"
+          disabled={isLoading}
+        />
+
+        {file ? (
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-2xl shrink-0 text-[#ff6b6b]">
+                {file.type === "application/pdf" ? "▣" : "◈"}
+              </span>
+              <div className="text-left min-w-0">
+                <p className="text-white font-bold tracking-wide truncate uppercase text-sm">
+                  {file.name}
                 </p>
-                <p className="text-white/40 text-sm">
-                  PDF, JPG, or PNG · Max 10MB
+                <p className="text-[#00d4ff]/50 text-xs tracking-[0.1em] font-mono mt-0.5">
+                  {formatFileSize(file.size)} · READY TO ROAST
                 </p>
               </div>
+            </div>
+            {!isLoading && (
+              <button
+                onClick={(e) => { e.stopPropagation(); clearFile(); }}
+                aria-label="Remove file"
+                className="shrink-0 w-8 h-8 border border-white/20 hover:border-[#ff6b6b] text-white/40 hover:text-[#ff6b6b] transition-all flex items-center justify-center text-base"
+              >
+                ✕
+              </button>
             )}
           </div>
-
-          {/* Validation error */}
-          {validationError && (
-            <p className="text-[#ff6b6b] text-sm text-center -mt-1">
-              {validationError}
-            </p>
-          )}
-
-          {/* Loading message */}
-          {isLoading && (
-            <p className="text-white/60 text-sm text-center animate-pulse">
-              {loadingMessage}
-            </p>
-          )}
-
-          {/* API error */}
-          {status === "error" && apiError && (
-            <div className="bg-[#ff6b6b]/10 border border-[#ff6b6b]/30 rounded-xl px-4 py-3 text-[#ff6b6b] text-sm text-center">
-              {apiError}
+        ) : (
+          <div className="flex flex-col items-center gap-3 pointer-events-none py-4">
+            <div className={`text-5xl transition-all duration-300 ${isDragging ? "text-[#00d4ff] scale-110" : "text-white/20"}`}>
+              {isDragging ? "◈" : "▣"}
             </div>
-          )}
+            <p className={`font-bold tracking-[0.15em] uppercase text-sm transition-colors ${isDragging ? "text-[#00d4ff]" : "text-white/50"}`}>
+              {isDragging ? "Drop to Upload" : "Drag your resume here or click to upload"}
+            </p>
+            <p className="text-white/20 text-xs tracking-[0.1em] font-mono uppercase">
+              PDF · JPG · PNG &nbsp;/&nbsp; Max 10MB
+            </p>
+          </div>
+        )}
+      </div>
 
-          {/* CTA button */}
-          <button
-            onClick={handleRoast}
-            disabled={!file || isLoading}
-            className={[
-              "w-full py-4 rounded-xl font-bold text-lg tracking-wide transition-all",
-              file && !isLoading
-                ? "bg-[#ff6b6b] hover:bg-[#ff5252] text-white shadow-lg shadow-[#ff6b6b]/30 hover:shadow-[#ff6b6b]/50 hover:scale-[1.02] active:scale-[0.98]"
-                : "bg-white/10 text-white/30 cursor-not-allowed",
-            ].join(" ")}
-          >
-            {isLoading ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="animate-spin inline-block">🔥</span>
-                {status === "extracting" ? "Extracting..." : "Roasting..."}
-              </span>
-            ) : (
-              "🔥 Roast My Resume"
-            )}
-          </button>
-        </>
+      {/* Validation error */}
+      {validationError && (
+        <p className="text-[#ff6b6b] text-xs tracking-[0.1em] font-mono uppercase text-center">
+          ✕ {validationError}
+        </p>
       )}
 
-      {/* Results */}
-      {status === "done" && result && (
-        <RoastResult
-          result={result}
-          fileName={file?.name ?? "resume"}
-          onReset={reset}
-        />
+      {/* Loading status */}
+      {isLoading && (
+        <div className="flex items-center justify-center gap-3 py-1">
+          <div className="flex gap-1">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="w-1.5 h-1.5 bg-[#00d4ff] rounded-full animate-bounce"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </div>
+          <p className="text-[#00d4ff]/70 text-xs tracking-[0.2em] font-mono uppercase">
+            {status === "extracting" ? "Extracting resume data..." : "Roasting in progress..."}
+          </p>
+        </div>
       )}
+
+      {/* API error */}
+      {status === "error" && apiError && (
+        <div className="border border-[#ff6b6b]/30 bg-[#ff6b6b]/5 px-4 py-3 text-[#ff6b6b] text-xs tracking-[0.1em] font-mono uppercase text-center">
+          ✕ {apiError}
+        </div>
+      )}
+
+      {/* CTA button */}
+      <button
+        onClick={handleRoast}
+        disabled={!file || isLoading}
+        className={[
+          "w-full py-4 font-black text-sm tracking-[0.25em] uppercase transition-all duration-300",
+          file && !isLoading
+            ? "bg-[#ff6b6b] hover:bg-[#ff5252] text-white btn-glow hover:scale-[1.02] active:scale-[0.98]"
+            : "bg-white/5 text-white/20 cursor-not-allowed border border-white/10",
+        ].join(" ")}
+      >
+        {isLoading ? (
+          <span className="flex items-center justify-center gap-3">
+            <span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            {status === "extracting" ? "Extracting..." : "Roasting..."}
+          </span>
+        ) : (
+          "▶ Roast My Resume"
+        )}
+      </button>
     </div>
   );
 }
